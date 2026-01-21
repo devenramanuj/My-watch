@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mood Architect AI - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Segoe UI', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        .heart-rate-box {
+            font-size: 50px;
+            font-weight: bold;
+            color: #ef4444;
+            margin: 20px 0;
+        }
+        .status-badge {
+            padding: 8px 15px;
+            border-radius: 50px;
+            font-size: 14px;
+            background: #334155;
+        }
+        canvas {
+            margin-top: 20px;
+            background: #0f172a;
+            border-radius: 10px;
+        }
+        button {
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover { background: #0ea5e9; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Mood Architect AI</h2>
+    <p class="status-badge" id="status">સ્ટેટસ: વોચ ડિસ્કનેક્ટ છે</p>
+    
+    <div class="heart-rate-box">
+        <span id="hr-display">--</span> <small style="font-size: 20px;">BPM</small>
+    </div>
+
+    <button onclick="connectBluetooth()">વોચ સાથે જોડો</button>
+
+    <div style="margin-top: 30px;">
+        <canvas id="hrChart"></canvas>
+    </div>
+    
+    <p id="ai-advice" style="margin-top: 20px; font-style: italic; color: #94a3b8;">
+        વોચ કનેક્ટ કરો એટલે AI તમને સલાહ આપશે...
+    </p>
+</div>
+
+<script>
+    let hrData = [];
+    let labels = [];
+    let chart;
+
+    // ગ્રાફ સેટઅપ
+    const ctx = document.getElementById('hrChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Heart Rate',
+                data: hrData,
+                borderColor: '#38bdf8',
+                tension: 0.4,
+                fill: false
+            }]
+        }
+    });
+
+    async function connectBluetooth() {
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ services: ['heart_rate'] }]
+            });
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService('heart_rate');
+            const char = await service.getCharacteristic('heart_rate_measurement');
+            
+            document.getElementById('status').innerText = "સ્ટેટસ: કનેક્ટ થઈ ગયું!";
+            char.startNotifications();
+            
+            char.addEventListener('characteristicvaluechanged', (event) => {
+                const value = event.target.value;
+                const hr = value.getUint8(1);
+                updateDashboard(hr);
+            });
+        } catch (error) {
+            console.log(error);
+            alert("ભૂલ: " + error);
+        }
+    }
+
+    function updateDashboard(hr) {
+        document.getElementById('hr-display').innerText = hr;
+        
+        // ગ્રાફ અપડેટ
+        const now = new Date();
+        labels.push(now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds());
+        hrData.push(hr);
+        
+        if (labels.length > 10) { labels.shift(); hrData.shift(); }
+        chart.update();
+
+        // AI સલાહ
+        let advice = "";
+        if (hr > 100) {
+            advice = "ભાઈ સાંભળો: તમારો હાર્ટ રેટ વધી રહ્યો છે થોડા ઊંડા શ્વાસ લો";
+        } else if (hr < 60) {
+            advice = "ભાઈ: તમે એકદમ રિલેક્સ છો અથવા આરામ કરી રહ્યા છો";
+        } else {
+            advice = "મોજ કરો ભાઈ: બધું જ બરાબર ચાલી રહ્યું છે";
+        }
+        document.getElementById('ai-advice').innerText = advice;
+    }
+</script>
+
+</body>
+</html>
