@@ -1,182 +1,42 @@
-<!DOCTYPE html>
-<html lang="gu">
-<head>
-    <meta charset="UTF-8">
-    <title>Smart Gesture Control</title>
-    <style>
-        body { background: #1a1a1a; color: white; text-align: center; font-family: sans-serif; }
-        .box { 
-            width: 200px; height: 200px; background: #38bdf8; 
-            margin: 50px auto; transition: transform 0.1s ease; 
-            border-radius: 20px;
-        }
-        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #4ade80; border: none; border-radius: 10px; }
-    </style>
-</head>
-<body>
+async function connectWatch() {
+    const statusEl = document.getElementById('status');
+    try {
+        // બધી વોચ દેખાય એ રીતે સ્કેનિંગ
+        const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: [
+                'heart_rate', 
+                'battery_service', 
+                '0000180d-0000-1000-8000-00805f9b34fb', // Standard HR
+                '0000fee0-0000-1000-8000-00805f9b34fb'  // Mi/DaFit Specific
+            ]
+        });
 
-    <h2>વોચના ઈશારે બોક્સ ફેરવો!</h2>
-    <p id="info">વોચ કનેક્ટ કરીને કાંડું હલાવો</p>
-    
-    <div class="box" id="move-box"></div>
+        const server = await device.gatt.connect();
+        statusEl.innerText = "કનેક્ટ થઈ ગયું! સર્વિસ શોધી રહ્યો છું...";
 
-    <button onclick="connectAccelerometer()">Gesture મોડ ચાલુ કરો</button>
-
-    <script>
-        async function connectAccelerometer() {
-            try {
-                // આપણે એવા ડિવાઈસ શોધીશું જે મોશન ડેટા આપે છે
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: ['battery_service'] // ઘણી વોચમાં બેટરી સર્વિસ સરળતાથી મળે છે
-                });
-
-                const server = await device.gatt.connect();
-                document.getElementById('info').innerText = "જોડાઈ ગયું! હવે હાથ હલાવો...";
-
-                // આપણે અહીં એક્સેલરોમીટરનો ડેટા વાંચવાનો પ્રયત્ન કરીશું
-                // નોંધ: અલગ વોચમાં આનો UUID અલગ હોઈ શકે છે
-                console.log("તમારી વોચની બધી સર્વિસ ચેક કરી રહ્યો છું...");
-                
-            } catch (error) {
-                alert("ભૂલ: " + error.message);
+        // બધી જ સર્વિસ જે વોચમાં ઉપલબ્ધ છે એની યાદી મેળવો
+        const services = await server.getPrimaryServices();
+        
+        let foundAny = false;
+        for (const service of services) {
+            console.log("સર્વિસ મળી: " + service.uuid);
+            const chars = await service.getCharacteristics();
+            for (const char of chars) {
+                if (char.properties.notify) {
+                    await char.startNotifications();
+                    char.addEventListener('characteristicvaluechanged', (e) => {
+                        let val = e.target.value.getUint8(1) || e.target.value.getUint8(0);
+                        document.getElementById('hr-display').innerText = val;
+                        foundAny = true;
+                    });
+                }
             }
         }
+        
+        if(!foundAny) statusEl.innerText = "વોચ તો જોડાઈ પણ ડેટા લૉક છે ભાઈ!";
 
-        // તમારા ફોનના સેન્સર સાથે ટેસ્ટ કરવા માટે (જો વોચ ના હોય તો)
-        window.addEventListener('deviceorientation', (event) => {
-            let x = event.beta;  // આગળ-પાછળ
-            let y = event.gamma; // ડાબે-જમણે
-            document.getElementById('move-box').style.transform = `rotateX(${x}deg) rotateY(${y}deg)`;
-        });
-    </script>
-</body>
-</html>
-            display: inline-block;
-        }
-        canvas {
-            margin-top: 20px;
-            background: #0f172a;
-            border-radius: 10px;
-        }
-        button {
-            background: #38bdf8;
-            color: #0f172a;
-            border: none;
-            padding: 12px 30px;
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        button:hover { background: #0ea5e9; }
-        #ai-advice { margin-top: 20px; font-style: italic; color: #94a3b8; min-height: 40px; }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <h2>Mood Architect AI</h2>
-    <div class="status-badge" id="status">સ્ટેટસ: વોચ ડિસ્કનેક્ટ છે</div>
-    
-    <div class="heart-rate-box">
-        <span id="hr-display">--</span> <small style="font-size: 20px;">BPM</small>
-    </div>
-
-    <button onclick="connectBluetooth()">વોચ સાથે જોડો</button>
-
-    <div style="margin-top: 30px;">
-        <canvas id="hrChart"></canvas>
-    </div>
-    
-    <p id="ai-advice">
-        વોચ કનેક્ટ કરો એટલે AI તમને સલાહ આપશે...
-    </p>
-</div>
-
-<script>
-    let hrData = [];
-    let labels = [];
-    let chart;
-
-    // Chart.js સેટઅપ
-    const ctx = document.getElementById('hrChart').getContext('2d');
-    chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Live Heart Rate',
-                data: hrData,
-                borderColor: '#38bdf8',
-                backgroundColor: 'rgba(56, 189, 248, 0.2)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            scales: { y: { beginAtZero: false, min: 40, max: 180 } }
-        }
-    });
-
-    async function connectBluetooth() {
-        const statusEl = document.getElementById('status');
-        try {
-            statusEl.innerText = "સ્કેનિંગ શરૂ છે...";
-            
-            // સુધારેલો રસ્તો: બધી સર્વિસ ચેક કરશે
-            const device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: ['heart_rate'] 
-            });
-
-            statusEl.innerText = "કનેક્ટ થઈ રહ્યું છે: " + device.name;
-            const server = await device.gatt.connect();
-            
-            // Heart Rate સર્વિસ મેળવવી
-            const service = await server.getPrimaryService('heart_rate');
-            const characteristic = await service.getCharacteristic('heart_rate_measurement');
-            
-            statusEl.innerText = "કનેક્ટ થઈ ગયું! ડેટા વાંચી રહ્યો છું...";
-            characteristic.startNotifications();
-            
-            characteristic.addEventListener('characteristicvaluechanged', (event) => {
-                const value = event.target.value;
-                const hr = value.getUint8(1); 
-                updateDashboard(hr);
-            });
-
-            device.addEventListener('gattserverdisconnected', () => {
-                statusEl.innerText = "વોચ ડિસ્કનેક્ટ થઈ ગઈ!";
-            });
-
-        } catch (error) {
-            console.error(error);
-            statusEl.innerText = "ભૂલ: " + error.message;
-            alert("ભૂલ: " + error.message);
-        }
+    } catch (error) {
+        alert("ભૂલ: " + error.message);
     }
-
-    function updateDashboard(hr) {
-        document.getElementById('hr-display').innerText = hr;
-        
-        const now = new Date();
-        const timeStr = now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds();
-        
-        labels.push(timeStr);
-        hrData.push(hr);
-        
-        if (labels.length > 15) { labels.shift(); hrData.shift(); }
-        chart.update();
-
-        let advice = "મોજ કરો ભાઈ બધું બરાબર છે";
-        if (hr > 100) advice = "⚠️ ભાઈ થોડી શાંતિ રાખો સ્ટ્રેસ લેવલ વધી રહ્યું છે";
-        else if (hr < 60) advice = "💤 તમે કદાચ આરામમાં છો અથવા ઊંઘમાં છો";
-        
-        document.getElementById('ai-advice').innerText = advice;
-    }
-</script>
-
-</body>
-</html>
+}
