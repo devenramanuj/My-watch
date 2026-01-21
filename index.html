@@ -33,6 +33,8 @@
             border-radius: 50px;
             font-size: 14px;
             background: #334155;
+            margin-bottom: 20px;
+            display: inline-block;
         }
         canvas {
             margin-top: 20px;
@@ -51,13 +53,14 @@
             transition: 0.3s;
         }
         button:hover { background: #0ea5e9; }
+        #ai-advice { margin-top: 20px; font-style: italic; color: #94a3b8; min-height: 40px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>Mood Architect AI</h2>
-    <p class="status-badge" id="status">સ્ટેટસ: વોચ ડિસ્કનેક્ટ છે</p>
+    <div class="status-badge" id="status">સ્ટેટસ: વોચ ડિસ્કનેક્ટ છે</div>
     
     <div class="heart-rate-box">
         <span id="hr-display">--</span> <small style="font-size: 20px;">BPM</small>
@@ -69,7 +72,7 @@
         <canvas id="hrChart"></canvas>
     </div>
     
-    <p id="ai-advice" style="margin-top: 20px; font-style: italic; color: #94a3b8;">
+    <p id="ai-advice">
         વોચ કનેક્ટ કરો એટલે AI તમને સલાહ આપશે...
     </p>
 </div>
@@ -79,65 +82,80 @@
     let labels = [];
     let chart;
 
-    // ગ્રાફ સેટઅપ
+    // Chart.js સેટઅપ
     const ctx = document.getElementById('hrChart').getContext('2d');
     chart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
             datasets: [{
-                label: 'Heart Rate',
+                label: 'Live Heart Rate',
                 data: hrData,
                 borderColor: '#38bdf8',
+                backgroundColor: 'rgba(56, 189, 248, 0.2)',
                 tension: 0.4,
-                fill: false
+                fill: true
             }]
+        },
+        options: {
+            scales: { y: { beginAtZero: false, min: 40, max: 180 } }
         }
     });
 
     async function connectBluetooth() {
+        const statusEl = document.getElementById('status');
         try {
+            statusEl.innerText = "સ્કેનિંગ શરૂ છે...";
+            
+            // સુધારેલો રસ્તો: બધી સર્વિસ ચેક કરશે
             const device = await navigator.bluetooth.requestDevice({
-                filters: [{ services: ['heart_rate'] }]
+                acceptAllDevices: true,
+                optionalServices: ['heart_rate'] 
             });
+
+            statusEl.innerText = "કનેક્ટ થઈ રહ્યું છે: " + device.name;
             const server = await device.gatt.connect();
+            
+            // Heart Rate સર્વિસ મેળવવી
             const service = await server.getPrimaryService('heart_rate');
-            const char = await service.getCharacteristic('heart_rate_measurement');
+            const characteristic = await service.getCharacteristic('heart_rate_measurement');
             
-            document.getElementById('status').innerText = "સ્ટેટસ: કનેક્ટ થઈ ગયું!";
-            char.startNotifications();
+            statusEl.innerText = "કનેક્ટ થઈ ગયું! ડેટા વાંચી રહ્યો છું...";
+            characteristic.startNotifications();
             
-            char.addEventListener('characteristicvaluechanged', (event) => {
+            characteristic.addEventListener('characteristicvaluechanged', (event) => {
                 const value = event.target.value;
-                const hr = value.getUint8(1);
+                const hr = value.getUint8(1); 
                 updateDashboard(hr);
             });
+
+            device.addEventListener('gattserverdisconnected', () => {
+                statusEl.innerText = "વોચ ડિસ્કનેક્ટ થઈ ગઈ!";
+            });
+
         } catch (error) {
-            console.log(error);
-            alert("ભૂલ: " + error);
+            console.error(error);
+            statusEl.innerText = "ભૂલ: " + error.message;
+            alert("ભૂલ: " + error.message);
         }
     }
 
     function updateDashboard(hr) {
         document.getElementById('hr-display').innerText = hr;
         
-        // ગ્રાફ અપડેટ
         const now = new Date();
-        labels.push(now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds());
+        const timeStr = now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds();
+        
+        labels.push(timeStr);
         hrData.push(hr);
         
-        if (labels.length > 10) { labels.shift(); hrData.shift(); }
+        if (labels.length > 15) { labels.shift(); hrData.shift(); }
         chart.update();
 
-        // AI સલાહ
-        let advice = "";
-        if (hr > 100) {
-            advice = "ભાઈ સાંભળો: તમારો હાર્ટ રેટ વધી રહ્યો છે થોડા ઊંડા શ્વાસ લો";
-        } else if (hr < 60) {
-            advice = "ભાઈ: તમે એકદમ રિલેક્સ છો અથવા આરામ કરી રહ્યા છો";
-        } else {
-            advice = "મોજ કરો ભાઈ: બધું જ બરાબર ચાલી રહ્યું છે";
-        }
+        let advice = "મોજ કરો ભાઈ બધું બરાબર છે";
+        if (hr > 100) advice = "⚠️ ભાઈ થોડી શાંતિ રાખો સ્ટ્રેસ લેવલ વધી રહ્યું છે";
+        else if (hr < 60) advice = "💤 તમે કદાચ આરામમાં છો અથવા ઊંઘમાં છો";
+        
         document.getElementById('ai-advice').innerText = advice;
     }
 </script>
