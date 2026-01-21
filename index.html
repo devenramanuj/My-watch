@@ -2,38 +2,56 @@
 <html lang="gu">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mood Architect AI - Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Smart Gesture Control</title>
     <style>
-        body {
-            background-color: #0f172a;
-            color: #f8fafc;
-            font-family: 'Segoe UI', sans-serif;
-            text-align: center;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 600px;
-            margin: auto;
-            background: #1e293b;
-            padding: 25px;
+        body { background: #1a1a1a; color: white; text-align: center; font-family: sans-serif; }
+        .box { 
+            width: 200px; height: 200px; background: #38bdf8; 
+            margin: 50px auto; transition: transform 0.1s ease; 
             border-radius: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
         }
-        .heart-rate-box {
-            font-size: 50px;
-            font-weight: bold;
-            color: #ef4444;
-            margin: 20px 0;
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #4ade80; border: none; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <h2>વોચના ઈશારે બોક્સ ફેરવો!</h2>
+    <p id="info">વોચ કનેક્ટ કરીને કાંડું હલાવો</p>
+    
+    <div class="box" id="move-box"></div>
+
+    <button onclick="connectAccelerometer()">Gesture મોડ ચાલુ કરો</button>
+
+    <script>
+        async function connectAccelerometer() {
+            try {
+                // આપણે એવા ડિવાઈસ શોધીશું જે મોશન ડેટા આપે છે
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: ['battery_service'] // ઘણી વોચમાં બેટરી સર્વિસ સરળતાથી મળે છે
+                });
+
+                const server = await device.gatt.connect();
+                document.getElementById('info').innerText = "જોડાઈ ગયું! હવે હાથ હલાવો...";
+
+                // આપણે અહીં એક્સેલરોમીટરનો ડેટા વાંચવાનો પ્રયત્ન કરીશું
+                // નોંધ: અલગ વોચમાં આનો UUID અલગ હોઈ શકે છે
+                console.log("તમારી વોચની બધી સર્વિસ ચેક કરી રહ્યો છું...");
+                
+            } catch (error) {
+                alert("ભૂલ: " + error.message);
+            }
         }
-        .status-badge {
-            padding: 8px 15px;
-            border-radius: 50px;
-            font-size: 14px;
-            background: #334155;
-            margin-bottom: 20px;
+
+        // તમારા ફોનના સેન્સર સાથે ટેસ્ટ કરવા માટે (જો વોચ ના હોય તો)
+        window.addEventListener('deviceorientation', (event) => {
+            let x = event.beta;  // આગળ-પાછળ
+            let y = event.gamma; // ડાબે-જમણે
+            document.getElementById('move-box').style.transform = `rotateX(${x}deg) rotateY(${y}deg)`;
+        });
+    </script>
+</body>
+</html>
             display: inline-block;
         }
         canvas {
